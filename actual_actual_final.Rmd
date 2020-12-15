@@ -1,0 +1,122 @@
+---
+title: "Actual Final"
+author: "Zoe Wang"
+date: "12/11/2020"
+output: pdf_document
+---
+# Step 0: Importing Data
+
+```{r}
+yt_train_uncleaned <- read.csv("training.csv")
+test <- read.csv("test.csv")
+```
+
+# Step 1: Cleaning the Data
+
+```{r}
+library(dplyr)
+any(apply(yt_train_uncleaned, 2, function(x) sum(is.na(x))) > 0) # No NA values found
+any(apply(yt_train_uncleaned, 2, function(x) sum(is.infinite(x))) > 0) # No infinite values found
+any(apply(yt_train_uncleaned, 2, function(x) sum(is.nan(x))) > 0) # No NaN values found
+sum(duplicated(yt_train_uncleaned[, -1])) # No duplicated rows 
+
+summary(yt_train_uncleaned$Duration)
+# Nothing unusual with the duration data (such as 0 sec videos).
+# A video of 42895 seconds (or ~12 hours) isn't an unusual thing to find on YT
+
+summary(yt_train_uncleaned$views_2_hours)
+# Nothing too unusual here either unless you count the outliers
+
+useless_variables <- which(apply(yt_train_uncleaned[, -c(1, 2, dim(yt_train_uncleaned)[2])], 2, sum) == 0)
+# Grabs the indices that have nothing but zeroes
+yt_train <- yt_train_uncleaned[, -c(useless_variables + 2)] # Remove useless variables
+test <- test[,-c(useless_variables + 2)]
+
+
+binary_v <- 236:247 # Indices for predictors that are binary
+yt_train_scaled <- yt_train %>%
+mutate_if(is.numeric, scale)
+test_scaled <- test %>%
+mutate_if(is.numeric, scale)
+# Scales data in case scaling is needed for model
+#yt_train_scaled[, binary_v] <- yt_train[, binary_v]
+# Restores the scaled binary variables to their unscaled state
+
+write.csv(yt_train, "training_clean.csv")
+write.csv(test, "test_clean.csv")
+```
+
+```{r}
+#Loading in the cleaned data
+training <- read.csv("training_clean.csv")
+training <- training[, -1] #Removing X column
+
+test <- read.csv("test_clean.csv")
+test <- test[,-1] #Removing X column
+
+library(randomForest)
+set.seed(1)
+
+#Removing Publication date because it's not a quantitative predictor
+training <- training[,-2]
+test <- test[,-2]
+
+#Saving the test id's for later
+testid <- cbind(test$id)
+
+#Removing the id's
+training <- training[,-1]
+test <- test[,-1]
+
+#Creating a correlation matrix for use in findCorrelation
+corrmx <- cor(training)
+
+#Finding and removing variables with correlations > 0.8
+library(caret)
+correlated_vars <- findCorrelation(corrmx, cutoff = 0.8)
+training_uncorr <- training[,-correlated_vars]
+test_uncorr <- test[,-correlated_vars]
+
+#Finding the optimal mtry Random Forest model using the new data without the correlated variables
+forest_uncorr <- tuneRF(x = training_uncorr[,-172], y = training_uncorr$growth_2_6, plot = TRUE, doBest = TRUE)
+
+#Plotting to see what variables are unimportant
+varImpPlot(forest_uncorr, sort = FALSE, n.var = 40)
+
+#Removing all hog variables up until hog_485
+training_uncorr <- training_uncorr[,-(3:40)]
+test_uncorr <- test_uncorr[,-(3:40)]
+
+#Fitting a new RF to this new dataset
+without_hog485 <- tuneRF(x = training_uncorr[,-134], y = training_uncorr$growth_2_6, plot = TRUE, doBest = TRUE)
+
+varImpPlot(without_hog485, sort = FALSE, n.var = 40)
+
+#Remove the rest of the hog variables
+training_uncorr <- training_uncorr[,-(3:53)]
+test_uncorr <- test_uncorr[,-(3:53)]
+
+ncol(training_uncorr)
+ncol(test_uncorr)
+
+without_allhog <- tuneRF(x = training_uncorr[,-83], y = training_uncorr$growth_2_6, plot = TRUE, doBest = TRUE)
+
+#Remove more variables deemed unimportant from varImpPlot
+varImpPlot(without_allhog, sort = FALSE, n.var = 40)
+
+#The cnn and max variables are found to be unimportant
+unnecessary <- c(3, 4, 6, 8, 9, 10, 16, 19, 20) #removing max_Blue, green, red, and cnn_0,9,20,36,39,65
+
+training_uncorr <- training_uncorr[,-unnecessary]
+test_uncorr <- test_uncorr[,-unnecessary]
+
+ncol(training_uncorr)
+ncol(test_uncorr)
+
+library(randomForest)
+without_cnnmax <- tuneRF(x = training_uncorr[,-74], y = training_uncorr$growth_2_6, plot = TRUE, doBest = TRUE)
+
+final <- cbind(testid, predict(without_cnnmax, newdata = test_uncorr))
+colnames(final) <- c("id", "growth_2_6")
+write.csv(final, "rmcnn_max_final.csv", row.names = FALSE)
+```

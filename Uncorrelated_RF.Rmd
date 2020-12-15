@@ -1,0 +1,87 @@
+---
+title: "Uncorrelated RF"
+author: "Zoe Wang"
+date: "12/4/2020"
+output: pdf_document
+---
+
+```{r}
+training <- read.csv("training_clean.csv")
+training <- training[, -1] #Removing X column
+
+test <- read.csv("test_clean.csv")
+test <- test[,-1] #Removing X column
+
+# for (i in 3:247){
+#   training[,i] <- (training[,i] - mean(training[,i])) / sd(training[,i])
+#   test[,i] <- (test[,i] - mean(test[,i])) / sd(test[,i])
+# }
+
+library(randomForest)
+set.seed(1)
+
+training <- training[,-c(1,2)]
+test <- test[,-c(1,2)]
+
+corrmx <- cor(training)
+library(caret)
+correlated_vars <- findCorrelation(corrmx, cutoff = 0.8)
+
+#Finding the column of NA's in test_corr --> cnn_36
+library(stats)
+
+test_uncorr <- test[, -correlated_vars]
+# Identify variables with NA values and store their indices
+# na_variables <- which(apply(test_uncorr, 2, FUN = function(x) any(is.na(x))))
+# test_uncorr <- test_uncorr[, -na_variables]
+
+training_uncorr <- training[,-correlated_vars]
+# training_uncorr <- training_uncorr[, -na_variables]
+
+#RF with new matrix
+library(randomForest)
+forest_uncorr <- tuneRF(x = training_uncorr[,-dim(training_uncorr)[2]], y = training_uncorr$growth_2_6, plot = TRUE, doBest = TRUE)
+
+summary(forest_uncorr)
+
+test <- read.csv("test_clean.csv")
+id <- cbind(test$id)
+final <- cbind(id, predict(forest_uncorr, newdata = test_uncorr))
+colnames(final) <- c("id", "growth_2_6")
+write.csv(final, "rf_uncorr3.csv", row.names = FALSE)
+```
+
+```{r}
+library(glmnet)
+response_var <- read.csv("rf_Uncorr3.csv")
+# test_uncorr2 <- cbind(test_uncorr, "growth_2_6" = rep(0, dim(test_uncorr)[1]))
+grid <- 10^seq(10, -3, length = 100)
+set.seed(1)
+# uncorr_x <- model.matrix(growth_2_6 ~ ., data = training_uncorr)[, -1]
+uncorr_x <- model.matrix(growth_2_6 ~ ., data = training_uncorr)[, -1]
+uncorr_y <- training_uncorr$growth_2_6
+uncorr_test_x <- data.matrix(test_uncorr)
+uncorr_lasso <- glmnet(uncorr_x, uncorr_y, alpha = 1, family = "gaussian",
+                       lambda = grid, standardize = TRUE)
+uncorr_cv <- cv.glmnet(uncorr_x, uncorr_y, alpha = 1, family = "gaussian",
+                       lambda = grid, nfolds = 10)
+lambda <- uncorr_cv$lambda.min
+pred_lasso <- predict(uncorr_lasso, newx = uncorr_test_x, s = lambda)
+
+uncorr_ridge <- glmnet(uncorr_x, uncorr_y, alpha = 0, family = "gaussian", 
+                       lambda = grid, standardize = TRUE)
+uncorr_cv2 <- cv.glmnet(uncorr_x, uncorr_y, alpha = 0, family = "gaussian", 
+                        lambda = grid, nfolds = 10)
+lambda <- uncorr_cv$lambda.min
+pred_ridge <- predict(uncorr_ridge, newx = uncorr_test_x, s = lambda)
+summary(pred_ridge)
+summary(pred_lasso)
+
+lasso_data <- cbind(id, pred_lasso)
+colnames(lasso_data) <- c("id", "growth_2_6")
+write.csv(lasso_data, "lasso_uncorr.csv", row.names = FALSE)
+
+ridge_data <- cbind(id, pred_ridge)
+colnames(ridge_data) <- c("id", "growth_2_6")
+write.csv(ridge_data, "ridge_uncorr.csv", row.names = FALSE)
+```

@@ -1,0 +1,123 @@
+---
+title: "finding best threshold for corr"
+author: "Zoe Wang"
+date: "12/11/2020"
+output: pdf_document
+---
+
+```{r}
+training <- read.csv("training_clean.csv")
+training <- training[, -1] #Removing X column
+
+test <- read.csv("test_clean.csv")
+test <- test[,-1] #Removing X column
+
+library(randomForest)
+set.seed(1)
+
+#Removing Publication date because it's not a quantitative predictor
+training <- training[,-2]
+test <- test[,-2]
+testid <- cbind(test$id)
+#Removing the id's
+training <- training[,-1]
+test <- test[,-1]
+
+corrmx <- cor(training)
+library(caret)
+
+#Running through the different thresholds
+
+#Testing 0.5
+correlated_vars <- findCorrelation(corrmx, cutoff = 0.5)
+temp_training <- training[,-correlated_vars]
+temp_test <- test[,-correlated_vars]
+
+ncol(temp_training)
+ncol(temp_test)
+
+forest_uncorr05 <- tuneRF(x = temp_training[,-153], y = temp_training$growth_2_6, plot = TRUE, doBest = TRUE)
+forest_uncorr05
+
+#Testing 0.6
+correlated_vars <- findCorrelation(corrmx, cutoff = 0.6)
+temp_training <- training[,-correlated_vars]
+temp_test <- test[,-correlated_vars]
+
+ncol(temp_training)
+ncol(temp_test)
+
+forest_uncorr06 <- tuneRF(x = temp_training[,-165], y = temp_training$growth_2_6, plot = TRUE, doBest = TRUE)
+forest_uncorr06
+
+#Testing 0.7
+correlated_vars <- findCorrelation(corrmx, cutoff = 0.7)
+temp_training <- training[,-correlated_vars]
+temp_test <- test[,-correlated_vars]
+
+ncol(temp_training)
+ncol(temp_test)
+
+forest_uncorr07 <- tuneRF(x = temp_training[,-167], y = temp_training$growth_2_6, plot = TRUE, doBest = TRUE)
+forest_uncorr07
+
+#Testing 0.8
+correlated_vars <- findCorrelation(corrmx, cutoff = 0.8)
+temp_training <- training[,-correlated_vars]
+temp_test <- test[,-correlated_vars]
+
+ncol(temp_training)
+ncol(temp_test)
+
+forest_uncorr08 <- tuneRF(x = temp_training[,-172], y = temp_training$growth_2_6, plot = TRUE, doBest = TRUE)
+forest_uncorr08
+
+#Testing 0.9
+correlated_vars <- findCorrelation(corrmx, cutoff = 0.9)
+temp_training <- training[,-correlated_vars]
+temp_test <- test[,-correlated_vars]
+
+ncol(temp_training)
+ncol(temp_test)
+
+forest_uncorr09 <- tuneRF(x = temp_training[,-176], y = temp_training$growth_2_6, plot = TRUE, doBest = TRUE)
+forest_uncorr09
+```
+
+Intial try with abritrarily selected 0.8 threshold
+```{r}
+#RF with new matrix
+training <- read.csv("training_clean.csv")
+training <- training[, -1] #Removing X column
+
+test <- read.csv("test_clean.csv")
+test <- test[,-1] #Removing X column
+
+library(randomForest)
+set.seed(1)
+
+#Removing Publication date because it's not a quantitative predictor
+training <- training[,-2]
+test <- test[,-2]
+testid <- cbind(test$id)
+#Removing the id's
+training <- training[,-1]
+test <- test[,-1]
+
+corrmx <- cor(training)
+library(caret)
+correlated_vars <- findCorrelation(corrmx, cutoff = 0.8)
+training <- training[,-correlated_vars]
+test <- test[,-correlated_vars]
+
+ncol(training)
+ncol(test)
+
+library(randomForest)
+forest_uncorr0.8 <- tuneRF(x = training[,-172], y = training$growth_2_6, plot = TRUE, doBest = TRUE)
+
+#Creating prediction csv
+final <- cbind(testid, predict(forest_uncorr0.8, newdata = test))
+colnames(final) <- c("id", "growth_2_6")
+write.csv(final, "rf_uncorr08.csv", row.names = FALSE)
+```

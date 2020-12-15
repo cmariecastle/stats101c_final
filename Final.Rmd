@@ -1,0 +1,47 @@
+---
+title: "Final"
+author: "Oscar Monroy"
+date: "12/1/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Step 0: Importing Data
+
+```{r}
+yt_train_uncleaned <- read.csv("training.csv")
+yt_test <- read.csv("test.csv")
+```
+
+# Step 1: Cleaning the Data
+
+```{r}
+library(dplyr)
+any(apply(yt_train_uncleaned, 2, function(x) sum(is.na(x))) > 0) # No NA values found
+any(apply(yt_train_uncleaned, 2, function(x) sum(is.infinite(x))) > 0) # No infinite values found
+any(apply(yt_train_uncleaned, 2, function(x) sum(is.nan(x))) > 0) # No NaN values found
+sum(duplicated(yt_train_uncleaned[, -1])) # No duplicated rows 
+
+summary(yt_train_uncleaned$Duration)
+# Nothing unusual with the duration data (such as 0 sec videos).
+# A video of 42895 seconds (or ~12 hours) isn't an unusual thing to find on YT
+
+summary(yt_train_uncleaned$views_2_hours)
+# Nothing too unusual here either unless you count the outliers
+
+useless_variables <- which(apply(yt_train_uncleaned[, -c(1, 2, dim(yt_train_uncleaned)[2])], 2, sum) == 0)
+# Grabs the indices that have nothing but zeroes
+yt_train <- yt_train_uncleaned[, -c(useless_variables + 2)] # Remove useless variables
+
+binary_v <- 236:247 # Indices for predictors that are binary
+yt_train_scaled <- yt_train %>%
+  mutate_if(is.numeric, scale)
+# Scales data in case scaling is needed for model
+yt_train_scaled[, binary_v] <- yt_train[, binary_v]
+# Restores the scaled binary variables to their unscaled state
+
+# The plan is to use yt_train as our main data and yt_train_scaled as our secondary
+```
