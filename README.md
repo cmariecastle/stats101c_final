@@ -1,4 +1,4 @@
-# UCLA Statistics 101C Fall 2020 Final Project
+# UCLA Statistics 101C Fall 2020 Final Project: Predicting the growth rate of YouTube videos
 
 ### Instructor: Alan Vazquez
 
